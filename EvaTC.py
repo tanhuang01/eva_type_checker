@@ -130,7 +130,14 @@ class EvaTC(object):
         # function declaration: (def square ((x number)) -> number (* x x))
         if exp[0] == 'def':
             _tag, name, params, _ret_del, return_type_str, body = exp
-            return env.define(name, self.__tc_function(params, return_type_str, body, env))
+
+            # We have to extend environment with the function name BEFORE evaluating the body
+            # this is need to support recursive function calls:
+            param_types = [Type.Type.from_string(type_str) for name, type_str in params]
+            return_type = Type.Type.from_string(return_type_str)
+            env.define(name, Type.FunctionType(None, param_types, return_type))
+
+            return self.__tc_function(params, return_type_str, body, env)
 
         # ------------------------------------------------------------
         # function call: (square 2)
@@ -223,7 +230,7 @@ class EvaTC(object):
         if with_begin:
             _tag, *expressions = block
         else:
-            expressions = block
+            expressions = [block]  # put the command in a list for iterate
         result = None
         for exp in expressions:
             result = self.tc(exp, env)
@@ -252,7 +259,7 @@ class EvaTC(object):
         fn_env = TypeEnvironment(params_record, env)
 
         # check the body in the fn_env
-        actual_type = self.__tc_block(body, fn_env)
+        actual_type = self.__tc_block(body, fn_env, body[0] == 'begin')
 
         # check the return type
         if not return_type == actual_type:
@@ -265,7 +272,7 @@ class EvaTC(object):
 
     # check function call
     def __check_function_call(self, fn: Type.FunctionType, arg_values, env, exp):
-        arg_types = [self.tc(arg) for arg in arg_values]
+        arg_types = [self.tc(arg, env) for arg in arg_values]
 
         # check arity
         if len(fn.param_types) != len(arg_types):

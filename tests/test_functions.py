@@ -51,3 +51,36 @@ class TestFuncitons(unittest.TestCase):
                  (calc 10 10)
                 
             ''')), Type.number)
+
+    def test_inner_function_call(self):
+        self.assertEqual(eva_tc.tc_global(to_eva_block('''
+                (var value 100)
+            
+                (def calc ((x number) (y number)) -> Fn<number<number>> 
+                    (begin 
+                        (var z (+ x y))
+                        (def inner ((foo number)) -> number
+                            (+ (+ foo z) value)
+                        )
+                        inner
+                    ))
+                    
+                (var fn (calc 10 20))
+                
+                (fn 30)
+                
+            ''')), Type.number)
+
+    def test_factorial_function(self):
+        self.assertEqual(eva_tc.tc_global(to_eva_block('''
+                (def factorial ((x number)) -> number 
+                    (if (== x 1) 
+                        1
+                        (* x (factorial (- x 1)))
+                    )   
+                )
+
+                 (factorial 5)
+
+            ''')), Type.number)
+
