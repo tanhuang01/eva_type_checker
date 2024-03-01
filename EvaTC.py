@@ -128,7 +128,10 @@ class EvaTC(object):
 
         # ------------------------------------------------------------
         # function declaration: (def square ((x number)) -> number (* x x))
+        #
+        # syntactic sugar: (var square (lambda ((x number)) -> number (* x x)) )
         if exp[0] == 'def':
+            # extract for recursive check.
             _tag, name, params, _ret_del, return_type_str, body = exp
 
             # We have to extend environment with the function name BEFORE evaluating the body
@@ -137,6 +140,15 @@ class EvaTC(object):
             return_type = Type.Type.from_string(return_type_str)
             env.define(name, Type.FunctionType(None, param_types, return_type))
 
+            # delegate the 'def' to 'lambda'
+            var_exp = self.__transform_def_to_var_lambda(exp)
+
+            return self.tc(var_exp, env)
+
+        # ------------------------------------------------------------
+        # lambda function:  (lambda ((x number)) -> number (* x x))
+        if exp[0] == 'lambda':
+            _tag, params, _ret_del, return_type_str, body = exp
             return self.__tc_function(params, return_type_str, body, env)
 
         # ------------------------------------------------------------
@@ -284,3 +296,7 @@ class EvaTC(object):
             self.__expect(arg_types[i], fn.param_types[i], arg_values[i], exp)
 
         return fn.return_type
+
+    def __transform_def_to_var_lambda(self, exp):
+        _tag, name, params, _ret_del, return_type_str, body = exp
+        return ['var', name, ['lambda', params, _ret_del, return_type_str, body]]

@@ -117,3 +117,5 @@ boolean = Type('boolean')
 # function Type todo 总结 python 中一切皆是对象
 functions = FunctionType
 
+# simplify the function call
+from_string = Type.from_string
