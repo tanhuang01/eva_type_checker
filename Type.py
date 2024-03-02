@@ -1,4 +1,18 @@
+from __future__ import annotations
+
 import re
+
+
+def has_own_property(name):
+    return globals().get(name) is not None
+
+
+def get_property(name):
+    return globals().get(name)
+
+
+def add_property(name, alais_type):
+    globals()[name] = alais_type
 
 
 class Type():
@@ -25,7 +39,9 @@ class Type():
         raise RuntimeError(f"Unknown type {type_str}")
 
     def __eq__(self, other):
-        return isinstance(other, Type) and self.name == other.name
+        if isinstance(other, Alias):
+            return other.__eq__(self)
+        return self.name == other.name
 
     def __str__(self):
         return f"Type.{self.name}"
@@ -105,6 +121,19 @@ class FunctionType(Type):
         raise RuntimeError(f"TypeFunction.from_string: Unknown type: {type_str}.")
 
 
+class Alias(Type):
+    def __init__(self, name, parent: Alias):
+        super().__init__(name)
+        self.parent = parent
+
+    def __eq__(self, other):
+        # todo, modify the logic of code that determine whether two Types are equal
+        if self.name == other.name:
+            return True
+
+        return self.parent.__eq__(other)
+
+
 # Number Type
 number = Type('number')
 
@@ -114,7 +143,7 @@ string = Type('string')
 # boolean Type
 boolean = Type('boolean')
 
-# function Type todo 总结 python 中一切皆是对象
+# function Type
 functions = FunctionType
 
 # simplify the function call

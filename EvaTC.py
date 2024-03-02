@@ -56,6 +56,25 @@ class EvaTC(object):
             return self.__boolean_binary(exp, env)
 
         # ------------------------------------------------------------
+        # type declaration: (type <name_new_type> <base>)
+        # e.g (type int number)
+        if exp[0] == 'type':
+            _tag, name, base = exp
+
+            # Type already defined
+            if Type.has_own_property(name):
+                raise RuntimeError(f"Type {name} has already defined")
+
+            # No base type
+            if not Type.has_own_property(base):
+                raise RuntimeError(f"Type {base} is not defined")
+
+            alias = Type.Alias(name, Type.get_property(base))
+            Type.add_property(name, alias)
+
+            return alias
+
+        # ------------------------------------------------------------
         # Variable declaration: (var x 10)
         #
         # With type-check: (var (x number) "foo") # error!
