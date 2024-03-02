@@ -148,11 +148,11 @@ class ClassType(Type):
             return True
 
         # Alias
-        if isinstance(other, Type.Alias):
+        if isinstance(other, Alias):
             return other.__eq__(self)
 
         # super class
-        if self.super_class != Type.null:
+        if self.super_class != null:
             return self.super_class.__eq__(other)
 
         return False

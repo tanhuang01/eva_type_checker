@@ -87,11 +87,36 @@ class EvaTC(object):
 
             # Class is accessible by name
             Type.add_property(name, class_type)
+            # add to the cur environment
+            env.define(name, class_type)
 
             # body is evaluate in the class environment
             self.__tc_block(body, class_type.env)
-
             return class_type
+
+        # ------------------------------------------------------------
+        # class instantiation: (new <class_name> <arguments> ...)
+        if exp[0] == 'new':
+            _tag, class_name, *arg_values = exp
+
+            class_type = Type.get_property(class_name)
+            if class_type is None:
+                raise RuntimeError(f"Unknown class {class_name}")
+            arg_types = [self.tc(arg_type) for arg_type in arg_values]
+
+            return self.__check_function_call(
+                class_type.get_field('constructor'),
+                [class_type, *arg_types],
+                env,
+                exp
+            )
+
+        # ------------------------------------------------------------
+        # Property access: (prop <instance> <name>)
+        if exp[0] == 'prop':
+            _tag, instance, name = exp
+            instance_type = self.tc(instance, env)  # instance_type is a ClassType
+            return instance_type.get_field(name)
 
         # ------------------------------------------------------------
         # Variable declaration: (var x 10)
@@ -118,11 +143,21 @@ class EvaTC(object):
             return env.look_up(exp)
 
         # ------------------------------------------------------------
-        # set: (set x 10)
+        # set:
+        # e.g: (set x 10)
+        # e.g: (set (prop self x) 10)
         if exp[0] == 'set':
-            _tag, name, val = exp
+            _tag, ref, val, = exp
+            # 1. property assignment
+            if ref[0] == 'prop':
+                _tag, instance, prop_name = ref
+                instance_type = self.tc(instance, env)
+                value_type = self.tc(val, env)
+                prop_type = instance_type.get_field(prop_name)
+                return self.__expect(value_type, prop_type, val, exp)
 
-            var_type = self.tc(name, env)
+            # 2. simple assignment
+            var_type = self.tc(ref, env)
             val_type = self.tc(val, env)
 
             return self.__expect(val_type, var_type, val, exp)
@@ -194,8 +229,8 @@ class EvaTC(object):
         if isinstance(exp, (tuple, list)):
             fn = self.tc(exp[0], env)
             arg_values = exp[1:]
-
-            return self.__check_function_call(fn, arg_values, env, exp)
+            arg_types = [self.tc(arg, env) for arg in arg_values]
+            return self.__check_function_call(fn, arg_types, env, exp)
 
         raise RuntimeError(f"Unknown type for expression {exp}")
 
@@ -321,8 +356,7 @@ class EvaTC(object):
         return Type.functions(None, param_types, return_type)
 
     # check function call
-    def __check_function_call(self, fn: Type.FunctionType, arg_values, env, exp):
-        arg_types = [self.tc(arg, env) for arg in arg_values]
+    def __check_function_call(self, fn: Type.FunctionType, arg_types, env, exp):
 
         # check arity
         if len(fn.param_types) != len(arg_types):
@@ -331,7 +365,7 @@ class EvaTC(object):
 
         # check if the argument types matches the parameter types
         for i in range(len(arg_types)):
-            self.__expect(arg_types[i], fn.param_types[i], arg_values[i], exp)
+            self.__expect(arg_types[i], fn.param_types[i], arg_types[i], exp)
 
         return fn.return_type
 
