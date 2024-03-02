@@ -8,6 +8,12 @@ def has_own_property(name):
 
 
 def get_property(name):
+    """
+        get type property, which include 'number', 'string', 'null', 'boolean' and self-defined
+         class from Type-map, by its name.
+    :param name:
+    :return:
+    """
     return globals().get(name)
 
 

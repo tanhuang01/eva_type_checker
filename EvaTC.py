@@ -112,6 +112,18 @@ class EvaTC(object):
             )
 
         # ------------------------------------------------------------
+        # Super expression: (super <class_name>)
+        if exp[0] == 'super':
+            _tag, class_name = exp
+
+            class_type = Type.get_property(class_name)
+
+            if class_type is None:
+                raise RuntimeError(f"Unknown class {class_name}")
+
+            return class_type.super_class
+
+        # ------------------------------------------------------------
         # Property access: (prop <instance> <name>)
         if exp[0] == 'prop':
             _tag, instance, name = exp
