@@ -1,23 +1,33 @@
 import unittest
 from tests import eva_tc
-from parser import to_eva_lst
+from parser import to_eva_lst, to_eva_block
 import Type
 
 
-class TestPrimitive(unittest.TestCase):
+class TestClass(unittest.TestCase):
     def setUp(self) -> None:
         pass
 
-    def test_number(self):
-        self.assertEqual(eva_tc.tc(1), Type.number)
-        self.assertEqual(eva_tc.tc(42), Type.number)
+    def test_a_class_define(self):
+        self.assertEqual(eva_tc.tc(to_eva_block('''
+            (class Point null
+                (begin 
+                    (var (x number) 0)
+                    (var (y number) 0)
+                    
+                    (def constructor((self Point)(x number)(y number)) -> Point 
+                        (begin 
+                            self    
+                    ))
+                    
+                    (def calc ((self Point)) -> number
+                        1
+                    )
+                        
+            ))
+            
+            1
+        
+        ''')), Type.number)
 
-    def test_string(self):
-        self.assertEqual(eva_tc.tc('"a"'), Type.string)
-        self.assertEqual(eva_tc.tc('"to_be_continue"'), Type.string)
 
-    def test_boolean(self):
-        self.assertEqual(eva_tc.tc(to_eva_lst('False')), Type.boolean)
-        self.assertEqual(eva_tc.tc('True'), Type.boolean)
-        self.assertEqual(eva_tc.tc('"False"'), Type.boolean)
-        self.assertEqual(eva_tc.tc('"True"'), Type.boolean)

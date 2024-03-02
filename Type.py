@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from type_env import TypeEnvironment
 import re
 
 
@@ -134,6 +134,30 @@ class Alias(Type):
         return self.parent.__eq__(other)
 
 
+class ClassType(Type):
+    def __init__(self, name, super_class: Type):
+        super().__init__(name)
+        self.super_class = super_class
+        self.env = TypeEnvironment({}, None if super_class is null else super_class.env)
+
+    def get_field(self, name):
+        return self.env.look_up(name)
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+
+        # Alias
+        if isinstance(other, Type.Alias):
+            return other.__eq__(self)
+
+        # super class
+        if self.super_class != Type.null:
+            return self.super_class.__eq__(other)
+
+        return False
+
+
 # Number Type
 number = Type('number')
 
@@ -142,6 +166,9 @@ string = Type('string')
 
 # boolean Type
 boolean = Type('boolean')
+
+# null Type
+null = Type('null')
 
 # function Type
 functions = FunctionType

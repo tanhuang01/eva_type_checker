@@ -75,6 +75,25 @@ class EvaTC(object):
             return alias
 
         # ------------------------------------------------------------
+        # class declaration: (class <name> <super_class> <body>)
+        if exp[0] == 'class':
+            _tag, name, super_class_name, body = exp
+
+            # resolve super class
+            super_class_type = Type.get_property(super_class_name)
+
+            # new class type
+            class_type = Type.ClassType(name, super_class_type)
+
+            # Class is accessible by name
+            Type.add_property(name, class_type)
+
+            # body is evaluate in the class environment
+            self.__tc_block(body, class_type.env)
+
+            return class_type
+
+        # ------------------------------------------------------------
         # Variable declaration: (var x 10)
         #
         # With type-check: (var (x number) "foo") # error!
@@ -290,7 +309,7 @@ class EvaTC(object):
         fn_env = TypeEnvironment(params_record, env)
 
         # check the body in the fn_env
-        actual_type = self.__tc_block(body, fn_env, body[0] == 'begin')
+        actual_type = self.__tc_block(body, fn_env, isinstance(body, list) and body[0] == 'begin')
 
         # check the return type
         if not return_type == actual_type:
