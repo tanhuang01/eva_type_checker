@@ -36,7 +36,7 @@ def add_quote(obj):
 
 if __name__ == '__main__':
     result = to_eva_lst('''
-        (begin 
+        (begin
             (var x 10)
             (var y \\"10\\")
             (var z (+ x y))

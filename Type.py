@@ -19,6 +19,7 @@ def get_property(name):
 
 def add_property(name, alais_type):
     globals()[name] = alais_type
+    return alais_type
 
 
 class Type():
@@ -45,8 +46,14 @@ class Type():
         raise RuntimeError(f"Unknown type {type_str}")
 
     def __eq__(self, other):
+        # Alias
         if isinstance(other, Alias):
             return other.__eq__(self)
+
+        # Union
+        if isinstance(other, Union):
+            return other.__eq__(self)
+
         return self.name == other.name
 
     def __str__(self):
@@ -54,6 +61,9 @@ class Type():
 
     def __repr__(self):
         return self.__str__()
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 class FunctionType(Type):
@@ -164,6 +174,26 @@ class ClassType(Type):
         return False
 
 
+class Union(Type):
+    def __init__(self, name, option_types: list):
+        self.name = name
+        self.option_types = option_types
+
+    def __eq__(self, other):
+        if other is self:
+            return True
+        # Alias
+        if isinstance(other, Alias):
+            return other.__eq__(self)
+
+        # Union type
+        if isinstance(other, Union):
+            return set(self.option_types).__eq__(set(other.option_types))
+
+        # others
+        return any([option_type.__eq__(other) for option_type in self.option_types])
+
+
 # Number Type
 number = Type('number')
 
@@ -175,6 +205,9 @@ boolean = Type('boolean')
 
 # null Type
 null = Type('null')
+
+# any Type
+Any = Type('Any')
 
 # function Type
 functions = FunctionType

@@ -9,7 +9,8 @@ global_env = TypeEnvironment({
     "VERSION": Type.string,
     "False": Type.boolean,
     "True": Type.boolean,
-    "sum": Type.Type.from_string("Fn<number<number,number>>")
+    "sum": Type.Type.from_string("Fn<number<number,number>>"),
+    "typeof": Type.Type.from_string("Fn<string<Any>>"),
 })
 
 
@@ -61,18 +62,24 @@ class EvaTC(object):
         if exp[0] == 'type':
             _tag, name, base = exp
 
-            # Type already defined
-            if Type.has_own_property(name):
-                raise RuntimeError(f"Type {name} has already defined")
+            if base[0] == 'or':
+                options = base[1:]
+                option_types = [Type.from_string(option_type_str) for option_type_str in options]
+                return Type.add_property(name, Type.Union(name, option_types))
+            else:
+                # Type alias:
+                # Type already defined
+                if Type.has_own_property(name):
+                    raise RuntimeError(f"Type {name} has already defined")
 
-            # No base type
-            if not Type.has_own_property(base):
-                raise RuntimeError(f"Type {base} is not defined")
+                # No base type
+                if not Type.has_own_property(base):
+                    raise RuntimeError(f"Type {base} is not defined")
 
-            alias = Type.Alias(name, Type.get_property(base))
-            Type.add_property(name, alias)
+                alias = Type.Alias(name, Type.get_property(base))
+                Type.add_property(name, alias)
 
-            return alias
+                return alias
 
         # ------------------------------------------------------------
         # class declaration: (class <name> <super_class> <body>)
@@ -195,7 +202,25 @@ class EvaTC(object):
             t1 = self.tc(condition, env)
             self.__expect(t1, Type.boolean, condition, exp)
 
-            t2 = self.tc(consequence, env)
+            # Initially, environment used to tc consequent part
+            # is the same as the main env, however can be updated
+            # for the union type for the type casting
+            consequent_env = env
+
+            # check is the if condition is a type casting rule.
+            # This is used with union type to make a type concrete:
+            #
+            # (if (== (typeof foo) \\"string\\") ... )
+            #
+            if self.__is_type_cast_condition(condition):
+                name, specific_type = self.__get_specific_type(condition)
+                # update environment with the concrete type for this name
+                consequent_env = TypeEnvironment(
+                    {name: Type.from_string(specific_type)},
+                    env
+                )
+
+            t2 = self.tc(consequence, consequent_env)
             t3 = self.tc(alternative, env)
 
             # same types for both branches:
@@ -314,8 +339,14 @@ class EvaTC(object):
 
     @staticmethod
     def __expect_operator_type(_type, allow_types, exp):
-        if not _type in allow_types:
-            raise RuntimeError(f"\nUnSupported type : {_type} in {exp}, allowed: {allow_types}")
+        # Union Types:
+        if isinstance(_type, Type.Union):
+            if all([element_type in allow_types for element_type in _type.option_types]):
+                return
+        # other types
+        elif _type in allow_types:
+            return
+        raise RuntimeError(f"\nUnSupported type : {_type} in {exp}, allowed: {allow_types}")
 
     @staticmethod
     def __is_variable_name(name):
@@ -377,6 +408,8 @@ class EvaTC(object):
 
         # check if the argument types matches the parameter types
         for i in range(len(arg_types)):
+            if fn.param_types[i] == Type.Any:
+                continue
             self.__expect(arg_types[i], fn.param_types[i], arg_types[i], exp)
 
         return fn.return_type
@@ -384,3 +417,20 @@ class EvaTC(object):
     def __transform_def_to_var_lambda(self, exp):
         _tag, name, params, _ret_del, return_type_str, body = exp
         return ['var', name, ['lambda', params, _ret_del, return_type_str, body]]
+
+    @staticmethod
+    def __is_type_cast_condition(condition):
+        """
+        Whether an if-condition is type casting/specification
+        ,this is used with union types to make a type concrete:
+        e.g. (if (== (typeof foo) "string" ) ... )
+        :param condition:
+        :return:
+        """
+        op, *lhs = condition
+        return op == '==' and lhs[0][0] == 'typeof'
+
+    @staticmethod
+    def __get_specific_type(condition):
+        op, [_typeof, name], specific_type = condition
+        return [name, specific_type[1:-1]]
