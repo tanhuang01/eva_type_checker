@@ -1,6 +1,7 @@
 """
 Typed eva: static type-checker
 """
+import re
 
 import Type
 from type_env import TypeEnvironment
@@ -241,35 +242,83 @@ class EvaTC(object):
         #
         # syntactic sugar: (var square (lambda ((x number)) -> number (* x x)) )
         if exp[0] == 'def':
-            # extract for recursive check.
-            _tag, name, params, _ret_del, return_type_str, body = exp
 
-            # We have to extend environment with the function name BEFORE evaluating the body
-            # this is need to support recursive function calls:
-            param_types = [Type.Type.from_string(type_str) for name, type_str in params]
-            return_type = Type.Type.from_string(return_type_str)
-            env.define(name, Type.FunctionType(None, param_types, return_type))
-
-            # delegate the 'def' to 'lambda'
+            # transfer the 'def' into 'lambda'
             var_exp = self.__transform_def_to_var_lambda(exp)
 
+            if not self.__is_generic_define_function(exp):
+                # extract for recursive check.
+                _tag, name, params, _ret_del, return_type_str, body = exp
+
+                # We have to extend environment with the function name BEFORE evaluating the body
+                # this is need to support recursive function calls:
+                param_types = [Type.Type.from_string(type_str) for name, type_str in params]
+                return_type = Type.Type.from_string(return_type_str)
+                env.define(name, Type.FunctionType(None, param_types, return_type))
+
+            # delegate to lambda
             return self.tc(var_exp, env)
 
         # ------------------------------------------------------------
         # lambda function:  (lambda ((x number)) -> number (* x x))
         if exp[0] == 'lambda':
-            _tag, params, _ret_del, return_type_str, body = exp
-            return self.__tc_function(params, return_type_str, body, env)
+            if self.__is_generic_lambda_function(exp):
+                return self.__create_generic_function_type(exp, env)
+
+            # simple declaration:
+            return self.__create_simple_function_type(exp, env)
 
         # ------------------------------------------------------------
         # function call: (square 2)
         if isinstance(exp, (tuple, list)):
+
+            # 1. simple function call
             fn = self.tc(exp[0], env)
             arg_values = exp[1:]
+
+            actual_fn = fn
+
+            # 2. generic function call
+            if isinstance(fn, Type.GenericFunction):
+                actual_types = self.__extract_actual_call_types(exp)
+
+                # map the generic types to actual types
+                # e.g {K:number}
+                generics_type_map = self.__get_generic_types_map(fn.generic_types, actual_types)
+
+                # bind parameters and return-types
+                bound_params, bound_return_type = self.__bind_function_types(
+                    fn.params,
+                    fn.return_type,
+                    generics_type_map
+                )
+
+                # check the function body with the bound parameter types:
+                # This creates an actual function type
+                # NOTE: we pass environment as fn.env, i.e. closured environment
+                actual_fn = self.__tc_function(
+                    bound_params,
+                    bound_return_type,
+                    fn.body,
+                    fn.env
+                )
+
+                # In generics function call, parameters are passed from index 2
+                arg_values = exp[2:]
+
             arg_types = [self.tc(arg, env) for arg in arg_values]
-            return self.__check_function_call(fn, arg_types, env, exp)
+            return self.__check_function_call(actual_fn, arg_types, env, exp)
 
         raise RuntimeError(f"Unknown type for expression {exp}")
+
+    def __create_simple_function_type(self, exp, env):
+        """
+        Simple function declaration (no generic parameters)
+        Such functions are type-checked during declaration time.
+        :return:
+        """
+        _tag, params, _ret_del, return_type_str, body = exp
+        return self.__tc_function(params, return_type_str, body, env)
 
     @staticmethod
     def __is_number(exp, env):
@@ -415,6 +464,12 @@ class EvaTC(object):
         return fn.return_type
 
     def __transform_def_to_var_lambda(self, exp):
+        # 1. generic function
+        if self.__is_generic_define_function(exp):
+            _tag, name, generic_type_str, params, _ret_del, return_type_str, body = exp
+            return ['var', name, ['lambda', generic_type_str, params, _ret_del, return_type_str, body]]
+
+        # 2. Simple functions
         _tag, name, params, _ret_del, return_type_str, body = exp
         return ['var', name, ['lambda', params, _ret_del, return_type_str, body]]
 
@@ -434,3 +489,77 @@ class EvaTC(object):
     def __get_specific_type(condition):
         op, [_typeof, name], specific_type = condition
         return [name, specific_type[1:-1]]
+
+    @staticmethod
+    def __is_generic_define_function(exp):
+        """
+        Whether a function is generic
+        (def foo <K> (x K) -> K (+ x x))
+        :param exp:
+        :return:
+        """
+        return len(exp) == 7 and re.match('^<[^>]+>$', exp[2])
+
+    @staticmethod
+    def __create_generic_function_type(exp, env):
+        """
+        Generic function declaration
+        Such functions are not checked at the declaration,
+        instead, they are checked at call time, when all generic parameters are bounded
+        """
+        _tag, generic_type_str, params, _ret_del, return_type_str, body = exp
+
+        return Type.GenericFunction(
+            None,
+            generic_type_str[1:-1],
+            params,
+            return_type_str,
+            body,
+            env
+        )
+
+    @staticmethod
+    def __is_generic_lambda_function(exp):
+        """
+        Whether a function is generic
+        (lambda <K> (x K) -> K (+ x x))
+        :param exp:
+        :return:
+        """
+        return len(exp) == 6 and re.match('^<[^>]+>$', exp[1])
+
+    def __extract_actual_call_types(self, exp):
+        """
+        Extracts types for generics parameter types
+        :param exp: (combine <string> "hello")
+        :return: [Type.string]
+        """
+        actual_param_type_str = re.match('^<[^<]+>$', exp[1]).group(0)[1:-1].split(',')
+
+        if actual_param_type_str is None:
+            raise RuntimeError(f"No actual type provided in Generic call: {exp}")
+
+        return actual_param_type_str
+
+    @staticmethod
+    def __get_generic_types_map(generic_types, actual_types):
+        bound_types = {generic_types[i]: actual_types[i] for i in range(len(actual_types))}
+        return bound_types
+
+    @staticmethod
+    def __bind_function_types(params, return_type, generics_type_map):
+        # bind parameters
+        actual_params = []
+        for i in range(len(params)):
+            param_name, param_type = params[i]  # generic type here. e.g: K
+            actual_param_type = param_type
+            if generics_type_map.get(param_type):
+                actual_param_type = generics_type_map.get(param_type)
+            actual_params.append([param_name, actual_param_type])
+
+        # bind return-type
+        actual_return_type = return_type
+        if generics_type_map.get(actual_return_type):
+            actual_return_type = generics_type_map.get(actual_return_type)
+
+        return [actual_params, actual_return_type]

@@ -194,6 +194,21 @@ class Union(Type):
         return any([option_type.__eq__(other) for option_type in self.option_types])
 
 
+class GenericFunction(Type):
+    def __init__(self, name, generic_type_str, params, return_type, body, env):
+        if name:
+            super().__init__(name)
+        else:
+            super().__init__(f"lambda <{generic_type_str}>")
+        self.generic_types = generic_type_str
+        self.params = params
+        self.return_type = return_type
+        self.body = body
+        self.env = env
+
+
+
+
 # Number Type
 number = Type('number')
 
