@@ -1,7 +1,7 @@
 import unittest
 
 import Type
-from parser import to_eva_block
+from parser.EvaParser import to_eva_block
 from tests import eva_tc
 
 

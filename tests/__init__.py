@@ -1,4 +1,3 @@
-import EvaTC
-import unittest
+import eva_type_checker
 
-eva_tc = EvaTC.EvaTC()
+eva_tc = eva_type_checker.EvaTC()

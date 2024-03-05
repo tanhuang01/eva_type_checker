@@ -1,6 +1,6 @@
 import unittest
 from tests import eva_tc
-from parser import to_eva_lst
+from parser.EvaParser import to_eva_lst
 import Type
 
 

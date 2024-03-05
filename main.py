@@ -1,20 +1,34 @@
 # This is a sample Python script.
-import Type
-
 
 # Press ⌃R to execute it or replace it with your code.
 # Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
 
+import argparse
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press ⌘F8 to toggle the breakpoint.
+from parser.EvaParser import to_eva_block
+from eva_type_checker import EvaTC
 
 
-# Press the green button in the gutter to run the script.
+eva_tc = EvaTC()
+
+
+
+def exal_global(expression):
+    exp = to_eva_block(expression)
+    return eva_tc.tc_global(exp)
+
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
-    a1, [a2, a3], a4 = [1, [2, 3], 4]
-    print(a1, a2, a3, a4)
+    parser = argparse.ArgumentParser(description="Example script.")
+    parser.add_argument('-e', type=str, help='execute the command line')
+    parser.add_argument('-f', type=str, nargs='?', help="path to the .eva file to be executed")
+    args = parser.parse_args()
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    if args.e:
+        result = exal_global(args.e)
+    elif args.f:
+        file = open(args.f, 'r', buffering=1024)
+        src = file.read()
+        result = exal_global(src)
+
+    print("No Error!")
